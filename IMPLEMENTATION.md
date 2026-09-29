@@ -64,3 +64,7 @@ Track at least:
 6. metrics/tracing
 7. Docker Compose
 8. Kubernetes deployment and load test
+
+## Scaffold checkpoint
+
+The state model and local submission path are implemented. Optimistic locking is represented by a version check in memory; durable transactions, HTTP/gRPC, retry delivery, and workers remain planned.

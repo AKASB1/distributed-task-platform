@@ -65,3 +65,7 @@ These are references for architecture and operational behavior; this repository 
 ## License
 
 MIT
+
+## Available now
+
+A local Java 21 path has a versioned job model, state checks, in-memory repository and dispatcher, and a submission service. Run `mvn test`. External transports and stores are planned.

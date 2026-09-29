@@ -6,10 +6,20 @@
   <artifactId>distributed-task-platform</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <properties>
-    <java.version>21</java.version>
-    <spring-boot.version>3.5.0</spring-boot.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <junit.version>5.11.4</junit.version>
   </properties>
   <dependencies>
-    <!-- Add Spring Web, gRPC, PostgreSQL, Redis, RabbitMQ, and observability dependencies as modules are implemented. -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version><scope>test</scope>
+    </dependency>
   </dependencies>
+  <build>
+    <plugins>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.14.0</version></plugin>
+      <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.2</version></plugin>
+    </plugins>
+  </build>
 </project>

@@ -1,14 +1,15 @@
 package io.akasb.taskplatform;
 
-/**
- * Application entry point placeholder.
- *
- * The first implementation milestone is the job state machine and REST API.
- */
+import io.akasb.taskplatform.api.JobService;
+import io.akasb.taskplatform.dispatch.InMemoryDispatcher;
+import io.akasb.taskplatform.persistence.InMemoryJobRepository;
+
+/** Runs a local submission example. Network adapters are planned. */
 public final class Application {
     private Application() {}
 
     public static void main(String[] args) {
-        System.out.println("distributed-task-platform scaffold");
+        JobService service = new JobService(new InMemoryJobRepository(), new InMemoryDispatcher());
+        System.out.println(service.submit("demo").state());
     }
 }
