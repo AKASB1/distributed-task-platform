@@ -6,7 +6,7 @@ execution and job state tracking, built to stay correct under failure.
 **Status:** local MVP, benchmarked. The minimum path runs end to end on Java 21 / Spring Boot 3.5 with PostgreSQL,
 is covered by unit, integration, concurrency and failure-injection tests, runs in Docker Compose (optionally with
 RabbitMQ and Redis), and has a small documented load test. Kubernetes manifests are validated statically (not applied
-to a cluster). OpenTelemetry tracing and a gRPC worker protocol are not done (see [What is not done](#what-is-not-done)).
+to a cluster). OpenTelemetry tracing and a gRPC worker protocol are not done (see [TODO](#todo)).
 
 ## Available now
 
@@ -243,7 +243,7 @@ docs/             architecture and design trade-offs
 More: [docs/architecture.md](docs/architecture.md) (modules, data flow, state machine, failure handling),
 [docs/design-tradeoffs.md](docs/design-tradeoffs.md), [IMPLEMENTATION.md](IMPLEMENTATION.md) (delivery checklist).
 
-## What is not done
+## TODO
 
 - gRPC worker protocol and separate worker processes (workers run in-process behind `WorkerProtocol`) — optional next
   step.
