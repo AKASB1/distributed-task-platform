@@ -1,0 +1,19 @@
+# Voluntary disruptions (node drains, cluster upgrades) take down at most one app pod at a time. With the default
+# single replica this still allows a drain (minAvailable: 1 would block it forever); the evicted pod shuts down
+# gracefully and running attempts that do not finish are retried through their lease. With more replicas (RabbitMQ
+# dispatcher) it keeps the others serving.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: taskplatform
+  labels:
+    app.kubernetes.io/name: taskplatform
+    app.kubernetes.io/component: server
+spec:
+  maxUnavailable: 1
+  # a pod that is not ready (crash-looping, stuck) can always be evicted
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskplatform
+      app.kubernetes.io/component: server

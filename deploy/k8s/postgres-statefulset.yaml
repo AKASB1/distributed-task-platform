@@ -1,0 +1,136 @@
+# PostgreSQL 17, the only source of truth. A single instance with one persistent volume: enough for a local or
+# test cluster, not a highly available database (use a managed service or an operator for that, and point
+# SPRING_DATASOURCE_URL in the ConfigMap at it).
+#
+# POSTGRES_PASSWORD is applied only when the data volume is initialised. Changing the Secret later does not change
+# the password inside an existing database (ALTER ROLE ... PASSWORD ... is needed as well).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+spec:
+  serviceName: postgres-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+      app.kubernetes.io/component: database
+  # deleting the StatefulSet (or kubectl delete -k) keeps the data volume; delete the PVC to drop the data
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: database
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        # the image's "postgres" user; the entrypoint then skips its root-only steps
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          env:
+            # must match SPRING_DATASOURCE_URL / SPRING_DATASOURCE_USERNAME in the ConfigMap
+            - name: POSTGRES_DB
+              value: taskplatform
+            - name: POSTGRES_USER
+              value: taskplatform
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: taskplatform-db
+                  key: password
+            # a subdirectory, so that initdb never sees a non-empty volume root (lost+found on some storage)
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          # pg_isready over TCP (-h 127.0.0.1): during first-time initialisation the entrypoint runs a temporary
+          # server on the Unix socket only, which must not count as ready.
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -q -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -q -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -q -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              # Kubernetes sends SIGTERM (smart shutdown: wait for every client to disconnect, which a connection
+              # pool never does); stop with a fast shutdown instead, which is what the image's SIGINT does.
+              exec:
+                command: ["sh", "-c", "pg_ctl stop -D \"$PGDATA\" -m fast -w -t 50"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        # PostgreSQL's dynamic shared memory; the container runtime default (64 MiB) is small for parallel queries.
+        # Counts against the memory limit.
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: postgres
+          app.kubernetes.io/component: database
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        # no storageClassName: the cluster's default StorageClass provisions the volume
+        resources:
+          requests:
+            storage: 1Gi

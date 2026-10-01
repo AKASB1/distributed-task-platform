@@ -1,0 +1,29 @@
+# Component: RabbitMQ as the job dispatcher, so that several app replicas share the work.
+# Use it from an overlay OUTSIDE deploy/k8s (kustomize refuses an overlay that lives inside its base directory),
+# for example deploy/k8s-rabbitmq/kustomization.yaml:
+#   apiVersion: kustomize.config.k8s.io/v1beta1
+#   kind: Kustomization
+#   resources: [../k8s]
+#   components: [../k8s/optional/rabbitmq]
+#   replicas: [{name: taskplatform, count: 2}]
+# Without kustomize the switch is: apply rabbitmq.yaml and a Secret "taskplatform-rabbitmq" (key "password"), set
+# TASKPLATFORM_DISPATCHER_TYPE=rabbitmq, TASKPLATFORM_RABBITMQ_HOST=rabbitmq, TASKPLATFORM_RABBITMQ_USERNAME=taskplatform
+# in the ConfigMap and TASKPLATFORM_RABBITMQ_PASSWORD from that Secret in the Deployment, then restart the Deployment.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - rabbitmq.yaml
+
+secretGenerator:
+  # Broker password shared by RabbitMQ (RABBITMQ_DEFAULT_PASS) and the app (TASKPLATFORM_RABBITMQ_PASSWORD).
+  # LOCAL/DEV DEFAULT, NOT A SECRET: replace it (behavior: replace in your overlay, or a secret manager).
+  - name: taskplatform-rabbitmq
+    namespace: taskplatform
+    type: Opaque
+    literals:
+      - password=local-dev-only-change-me
+
+patches:
+  - path: configmap-patch.yaml
+  - path: deployment-patch.yaml

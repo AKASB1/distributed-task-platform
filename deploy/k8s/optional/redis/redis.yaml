@@ -1,0 +1,96 @@
+# Redis 7 as a cache only: idempotency answers (confirmed against PostgreSQL on every hit) and rate-limit counters.
+# Nothing in it is authoritative, so it runs without persistence; losing it costs a few database reads, and the app
+# fails open while it is unavailable.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: taskplatform
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: cache
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/component: cache
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        # the image's "redis" user
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          # no snapshots, no append-only file; evict the least recently used keys that carry a TTL (all of the
+          # app's keys do) instead of rejecting writes when the memory cap is reached
+          args: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "192mb",
+                 "--maxmemory-policy", "volatile-lru"]
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 64Mi
+---
+# Used by the app (TASKPLATFORM_REDIS_URI=redis://redis:6379).
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: taskplatform
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: cache
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP

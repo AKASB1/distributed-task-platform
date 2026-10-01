@@ -1,0 +1,17 @@
+# Turns on the Redis idempotency cache. PostgreSQL stays authoritative; Redis failures fail open.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskplatform-config
+  namespace: taskplatform
+data:
+  TASKPLATFORM_REDIS_ENABLED: "true"
+  TASKPLATFORM_REDIS_URI: redis://redis:6379
+  TASKPLATFORM_REDIS_TIMEOUT: 500ms
+  TASKPLATFORM_REDIS_IDEMPOTENCY_TTL: 24h
+  # Per-client limit on POST /v1/jobs with counters shared through Redis. Off by default: the client is the
+  # X-Client-Id header, else the remote address, and behind an ingress or proxy every client without the header
+  # shares the proxy's address (and therefore one limit).
+  TASKPLATFORM_RATE_LIMIT_ENABLED: "false"
+  TASKPLATFORM_RATE_LIMIT_REQUESTS_PER_WINDOW: "100"
+  TASKPLATFORM_RATE_LIMIT_WINDOW: 1s

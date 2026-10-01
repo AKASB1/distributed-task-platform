@@ -1,0 +1,11 @@
+target/
+tmp/
+logs/
+.git/
+.idea/
+.vscode/
+*.iml
+*.local.md
+benchmarks/results/
+deploy/
+docs/

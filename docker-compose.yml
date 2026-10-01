@@ -1,0 +1,92 @@
+# Local stack: the service and PostgreSQL (source of truth).
+#   docker compose up -d --build            app + postgres
+#   docker compose --profile broker up -d   + RabbitMQ (set TASKPLATFORM_DISPATCHER_TYPE=rabbitmq for the app)
+#   docker compose --profile cache up -d    + Redis (idempotency cache / rate limit, set TASKPLATFORM_REDIS_ENABLED=true)
+# The credentials below are local development defaults, not secrets; override them through a .env file.
+name: distributed-task-platform
+
+x-labels: &labels
+  cvproject: distributed-task-platform
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    labels: *labels
+    environment:
+      POSTGRES_DB: taskplatform
+      POSTGRES_USER: taskplatform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskplatform-dev}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskplatform -d taskplatform"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: .
+    image: distributed-task-platform:local
+    labels: *labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # only waited for when their profile is active (Compose 2.20+); the app also connects lazily
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/taskplatform
+      SPRING_DATASOURCE_USERNAME: taskplatform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-taskplatform-dev}
+      TASKPLATFORM_DISPATCHER_TYPE: ${TASKPLATFORM_DISPATCHER_TYPE:-in-memory}
+      TASKPLATFORM_RABBITMQ_HOST: rabbitmq
+      TASKPLATFORM_RABBITMQ_USERNAME: taskplatform
+      TASKPLATFORM_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-taskplatform-dev}
+      TASKPLATFORM_REDIS_ENABLED: ${TASKPLATFORM_REDIS_ENABLED:-false}
+      TASKPLATFORM_REDIS_URI: redis://redis:6379
+      TASKPLATFORM_RATE_LIMIT_ENABLED: ${TASKPLATFORM_RATE_LIMIT_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${APP_PORT:-18080}:18080"
+    stop_grace_period: 20s
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    profiles: ["broker"]
+    labels: *labels
+    environment:
+      RABBITMQ_DEFAULT_USER: taskplatform
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-taskplatform-dev}
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-15670}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15671}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["cache"]
+    labels: *labels
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:
+    labels: *labels
+
+networks:
+  default:
+    labels: *labels

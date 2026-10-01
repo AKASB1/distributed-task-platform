@@ -1,0 +1,20 @@
+# In-cluster endpoint of the REST API and the actuator (health, Prometheus). Not exposed outside the cluster; use
+#   kubectl -n taskplatform port-forward service/taskplatform 18080:18080
+# for local access (it listens on 127.0.0.1 only), or add an Ingress/Gateway of your choice.
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskplatform
+  labels:
+    app.kubernetes.io/name: taskplatform
+    app.kubernetes.io/component: server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: taskplatform
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 18080
+      targetPort: http
+      protocol: TCP

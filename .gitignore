@@ -38,3 +38,9 @@ Thumbs.db
 # Docker / local volumes
 .docker/
 volumes/
+
+# Private planning notes
+*.local.md
+
+# Local agent tooling (worktrees etc.)
+.claude/

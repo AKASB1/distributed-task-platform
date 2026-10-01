@@ -1,0 +1,62 @@
+# Non-secret settings of the service, passed as environment variables (Spring relaxed binding: TASKPLATFORM_LEASE_DURATION
+# -> taskplatform.lease-duration). Every key and its default is in src/main/resources/application.yml; the values
+# below repeat the defaults so that the knobs are visible in one place. The database password comes from the
+# taskplatform-db Secret (see kustomization.yaml), never from here.
+# This ConfigMap is not hash-suffixed: after changing it, run
+#   kubectl -n taskplatform rollout restart deployment/taskplatform
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskplatform-config
+  labels:
+    app.kubernetes.io/name: taskplatform
+    app.kubernetes.io/component: server
+data:
+  # Database: the in-cluster PostgreSQL service (postgres-statefulset.yaml). The init container of the Deployment
+  # waits for the host and port of this URL.
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/taskplatform
+  SPRING_DATASOURCE_USERNAME: taskplatform
+
+  # HTTP listener: all interfaces inside the pod (probes and the Service need it); the image default is the same.
+  BIND_ADDRESS: 0.0.0.0
+  PORT: "18080"
+
+  # Shutdown budget (terminationGracePeriodSeconds in app-deployment.yaml must stay above the sum):
+  # preStop 5 s + web graceful shutdown <= 20 s + worker shutdown grace 10 s (+ up to 5 s for interrupted handlers)
+  # + reconciler stop <= 5 s = 45 s < 60 s.
+  SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 20s
+  TASKPLATFORM_WORKERS_SHUTDOWN_GRACE: 10s
+
+  # JVM: heap relative to the container memory limit; exit (and get restarted) instead of limping on after an OOM.
+  JAVA_OPTS: -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError
+  LOG_FORMAT: logstash
+
+  # Leases and retries.
+  TASKPLATFORM_LEASE_DURATION: 30s
+  TASKPLATFORM_HEARTBEAT_INTERVAL: 10s
+  TASKPLATFORM_RETRY_INITIAL_DELAY: 1s
+  TASKPLATFORM_RETRY_MULTIPLIER: "2.0"
+  TASKPLATFORM_RETRY_MAX_DELAY: 60s
+  TASKPLATFORM_RETRY_JITTER: "0.5"
+  TASKPLATFORM_RETRY_DEFAULT_MAX_ATTEMPTS: "3"
+
+  # Reconciler (runs in every replica; every step is a compare-and-set, so several replicas are safe).
+  TASKPLATFORM_RECONCILER_ENABLED: "true"
+  TASKPLATFORM_RECONCILER_INTERVAL: 1s
+  TASKPLATFORM_RECONCILER_LEASE_GRACE: 2s
+  TASKPLATFORM_RECONCILER_PENDING_GRACE: 5s
+  TASKPLATFORM_RECONCILER_REDISPATCH_AFTER: 60s
+
+  # Worker pools. A list given through the environment replaces the default list: give every field of every pool.
+  TASKPLATFORM_WORKERS_ENABLED: "true"
+  TASKPLATFORM_WORKERS_POOLS_0_NAME: default
+  TASKPLATFORM_WORKERS_POOLS_0_QUEUE: default
+  TASKPLATFORM_WORKERS_POOLS_0_CONCURRENCY: "4"
+
+  # Dispatcher: the in-memory queue only feeds the workers of its own pod, which is why the Deployment runs one
+  # replica. To scale out, switch to RabbitMQ (component in optional/rabbitmq).
+  TASKPLATFORM_DISPATCHER_TYPE: in-memory
+
+  # Optional Redis (idempotency cache, rate-limit counters; never authoritative): component in optional/redis.
+  TASKPLATFORM_REDIS_ENABLED: "false"
+  TASKPLATFORM_RATE_LIMIT_ENABLED: "false"
