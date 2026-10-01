@@ -1,15 +1,13 @@
 package io.akasb.taskplatform;
 
-import io.akasb.taskplatform.api.JobService;
-import io.akasb.taskplatform.dispatch.InMemoryDispatcher;
-import io.akasb.taskplatform.persistence.InMemoryJobRepository;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-/** Runs a local submission example. Network adapters are planned. */
-public final class Application {
-    private Application() {}
+/** Spring Boot entry point: REST API, in-process worker pools, reconciler, metrics. */
+@SpringBootApplication
+public class Application {
 
     public static void main(String[] args) {
-        JobService service = new JobService(new InMemoryJobRepository(), new InMemoryDispatcher());
-        System.out.println(service.submit("demo").state());
+        SpringApplication.run(Application.class, args);
     }
 }

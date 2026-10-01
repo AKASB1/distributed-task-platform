@@ -1,0 +1,148 @@
+# The service: REST API, reconciler and in-process worker pools in one pod.
+#
+# One replica by default: with the default in-memory dispatcher each pod's queue only feeds its own workers, so a
+# second replica would not share work (it would still be safe, since every state change is a compare-and-set on
+# PostgreSQL, but jobs submitted to one pod run only there). To scale out, switch to the RabbitMQ dispatcher
+# (optional/rabbitmq) and raise the replica count; the broker then spreads job ids across all pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskplatform
+  labels:
+    app.kubernetes.io/name: taskplatform
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    # the new pod becomes ready before the old one stops; both may briefly run against the same database (safe)
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: taskplatform
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: taskplatform
+        app.kubernetes.io/component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "18080"
+        prometheus.io/path: /actuator/prometheus
+    spec:
+      automountServiceAccountToken: false   # the service does not talk to the Kubernetes API
+      enableServiceLinks: false             # no *_SERVICE_HOST / *_PORT variables leaking into Spring binding
+      # > preStop (5 s) + web graceful shutdown (<= 20 s) + worker grace (10 s + 5 s) + reconciler (<= 5 s); see the
+      # ConfigMap. Running attempts that do not finish in time are interrupted and retried through their lease.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        # the image's "app" user (Dockerfile: useradd --system); numeric so that runAsNonRoot can be verified
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Wait for PostgreSQL so that the first start does not crash-loop while the database initialises
+        # (Flyway needs the database at startup). Host and port are taken from SPRING_DATASOURCE_URL.
+        - name: wait-for-postgres
+          image: postgres:17-alpine
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: taskplatform-config
+          command:
+            - sh
+            - -c
+            - |
+              target="${SPRING_DATASOURCE_URL#jdbc:postgresql://}"
+              target="${target%%/*}"
+              host="${target%%:*}"
+              port=5432
+              case "$target" in *:*) port="${target##*:}" ;; esac
+              until pg_isready -q -h "$host" -p "$port" -U "$SPRING_DATASOURCE_USERNAME" -t 2; do
+                echo "waiting for PostgreSQL at $host:$port"
+                sleep 2
+              done
+              echo "PostgreSQL at $host:$port is accepting connections"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: app
+          image: distributed-task-platform:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 18080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: taskplatform-config
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: taskplatform-db
+                  key: password
+          # Spring Boot availability probes (management.endpoint.health.probes.enabled=true in application.yml).
+          # The startup probe covers JVM start, Flyway migrations and the reconciler's startup recovery.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # let endpoint removal reach kube-proxy / ingress before the web server stops accepting requests
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # JVM perf data and Tomcat's work directory; the root filesystem is read-only
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

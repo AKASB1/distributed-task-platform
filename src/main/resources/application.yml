@@ -1,0 +1,98 @@
+spring:
+  application:
+    name: distributed-task-platform
+  datasource:
+    # Override with SPRING_DATASOURCE_URL / _USERNAME / _PASSWORD. The default targets a local PostgreSQL.
+    url: jdbc:postgresql://127.0.0.1:5432/taskplatform
+    username: taskplatform
+    password: ${TASKPLATFORM_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      use-big-decimal-for-floats: true   # payload numbers keep their exact value
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${PORT:18080}
+  # Local runs bind to loopback only; the container image sets BIND_ADDRESS=0.0.0.0.
+  address: ${BIND_ADDRESS:127.0.0.1}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  structured:
+    format:
+      # JSON log lines (Logstash layout) carrying MDC fields jobId, attempt, queue, workerId.
+      console: ${LOG_FORMAT:logstash}
+
+taskplatform:
+  lease-duration: 30s
+  heartbeat-interval: 10s
+  retry:
+    initial-delay: 1s
+    multiplier: 2.0
+    max-delay: 60s
+    jitter: 0.5
+    default-max-attempts: 3
+  reconciler:
+    enabled: true
+    interval: 1s
+    lease-grace: 2s
+    pending-grace: 5s
+    redispatch-after: 60s
+    batch-size: 500
+  workers:
+    enabled: true
+    poll-timeout: 1s
+    shutdown-grace: 10s
+    pools:
+      - name: default
+        queue: default
+        concurrency: 4
+  api:
+    default-timeout: 30s
+    max-timeout: 1h
+    max-attempts-limit: 20
+    max-payload-bytes: 65536
+    require-served-queue: true
+  dispatcher:
+    type: in-memory          # or rabbitmq
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    queue-prefix: taskplatform.
+    prefetch: 16
+  redis:
+    enabled: false           # idempotency cache + rate-limit counters only; PostgreSQL stays authoritative
+    uri: redis://127.0.0.1:6379
+    timeout: 500ms
+    key-prefix: "taskplatform:"
+    idempotency-ttl: 24h
+  rate-limit:
+    enabled: false
+    requests-per-window: 100
+    window: 1s

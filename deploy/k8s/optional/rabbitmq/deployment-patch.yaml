@@ -1,0 +1,17 @@
+# The broker password reaches the app through the environment, from the generated Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskplatform
+  namespace: taskplatform
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          env:
+            - name: TASKPLATFORM_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: taskplatform-rabbitmq
+                  key: password

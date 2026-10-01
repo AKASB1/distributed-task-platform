@@ -1,0 +1,35 @@
+# Base deployment: the service (in-memory dispatcher, one replica) and PostgreSQL 17 in namespace "taskplatform".
+#   kubectl kustomize deploy/k8s          render
+#   kubectl apply -k deploy/k8s           deploy (needs the image distributed-task-platform:local on the nodes)
+#   scripts/validate-k8s.sh               render + schema validation without a cluster
+# RabbitMQ and Redis are kustomize components in optional/; this base does not reference them.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: taskplatform
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: distributed-task-platform
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
+    includeTemplates: true
+
+resources:
+  - namespace.yaml
+  - app-configmap.yaml
+  - postgres-service.yaml
+  - postgres-statefulset.yaml
+  - app-service.yaml
+  - app-deployment.yaml
+  - app-pdb.yaml
+
+secretGenerator:
+  # Database password shared by PostgreSQL (POSTGRES_PASSWORD) and the app (SPRING_DATASOURCE_PASSWORD).
+  # LOCAL/DEV DEFAULT, NOT A SECRET: replace it for any shared cluster, e.g. in an overlay with
+  #   secretGenerator: [{name: taskplatform-db, behavior: replace, envs: [.env.db]}]   (.env.* is git-ignored)
+  # or with a secret manager. The generated name carries a content hash, so a new password rolls the pods.
+  - name: taskplatform-db
+    type: Opaque
+    literals:
+      - password=local-dev-only-change-me

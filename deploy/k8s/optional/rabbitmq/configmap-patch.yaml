@@ -1,0 +1,14 @@
+# Switches the app from the in-memory queue to RabbitMQ (one durable queue per job queue, manual hand-off acks).
+# The app connects lazily and recovers the connection, so the broker may start after the app.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskplatform-config
+  namespace: taskplatform
+data:
+  TASKPLATFORM_DISPATCHER_TYPE: rabbitmq
+  TASKPLATFORM_RABBITMQ_HOST: rabbitmq
+  TASKPLATFORM_RABBITMQ_PORT: "5672"
+  TASKPLATFORM_RABBITMQ_USERNAME: taskplatform
+  TASKPLATFORM_RABBITMQ_VIRTUAL_HOST: /
+  TASKPLATFORM_RABBITMQ_PREFETCH: "16"

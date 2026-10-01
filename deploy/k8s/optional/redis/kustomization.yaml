@@ -1,0 +1,17 @@
+# Component: Redis as the idempotency-answer cache (and, if enabled, shared rate-limit counters).
+# Use it from an overlay OUTSIDE deploy/k8s (kustomize refuses an overlay that lives inside its base directory),
+# for example deploy/k8s-redis/kustomization.yaml:
+#   apiVersion: kustomize.config.k8s.io/v1beta1
+#   kind: Kustomization
+#   resources: [../k8s]
+#   components: [../k8s/optional/redis]          # or [../k8s/optional/rabbitmq, ../k8s/optional/redis]
+# Without kustomize the switch is: apply redis.yaml, set TASKPLATFORM_REDIS_ENABLED=true and
+# TASKPLATFORM_REDIS_URI=redis://redis:6379 in the ConfigMap, then restart the Deployment.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - redis.yaml
+
+patches:
+  - path: configmap-patch.yaml

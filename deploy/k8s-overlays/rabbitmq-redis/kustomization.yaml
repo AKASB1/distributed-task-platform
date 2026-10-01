@@ -1,0 +1,15 @@
+# Example overlay: the base plus RabbitMQ (shared work queue) and Redis (idempotency cache, rate-limit counters),
+# with two app replicas. Render: kubectl kustomize deploy/k8s-overlays/rabbitmq-redis
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../k8s
+
+components:
+  - ../../k8s/optional/rabbitmq
+  - ../../k8s/optional/redis
+
+replicas:
+  - name: taskplatform
+    count: 2
