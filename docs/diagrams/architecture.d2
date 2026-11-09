@@ -1,0 +1,29 @@
+vars: {
+  d2-config: {
+    sketch: true
+    layout-engine: elk
+    pad: 24
+  }
+}
+classes: {
+  comp: {style: {fill: "#DCEBFA"; stroke: "#2563A8"; stroke-width: 2; font-size: 24; font-color: "#1F2328"; border-radius: 6}}
+  ext: {style: {fill: "#FFFFFF"; stroke: "#57606A"; stroke-width: 2; font-size: 24; font-color: "#1F2328"}}
+  store: {shape: cylinder; style: {fill: "#FFFFFF"; stroke: "#2563A8"; stroke-width: 2; font-size: 24; font-color: "#1F2328"}}
+  flow: {style: {stroke: "#424A53"; stroke-width: 2; font-size: 24; font-color: "#1F2328"}}
+}
+direction: right
+
+api: "REST API · JobService\nvalidation · idempotency" {class: comp}
+reconciler: "Reconciler\nrecovers lost work" {class: comp}
+db: "PostgreSQL\njobs · deliveries" {class: store}
+dispatcher: "JobDispatcher\nin-memory · RabbitMQ" {class: comp}
+redis: "Redis (optional)\ncache · rate limit" {class: ext}
+workers: "worker pools\nTaskHandler" {class: comp}
+
+api -> db {class: flow}
+api -> dispatcher {class: flow}
+api -> redis {class: flow}
+reconciler -> db {class: flow}
+reconciler -> dispatcher {class: flow}
+dispatcher -> workers {class: flow}
+db <-> workers: "leases ·\nheartbeats" {class: flow}

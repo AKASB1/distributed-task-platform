@@ -1,0 +1,28 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: What happened instead, with the response or the log lines.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The requests or commands, the configuration that differs from the defaults, and how the service was started.
+      render: bash
+  - type: input
+    id: version
+    attributes:
+      label: Commit and JDK version
+      placeholder: "commit abc1234, JDK 21"

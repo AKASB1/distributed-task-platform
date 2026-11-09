@@ -1,8 +1,8 @@
 # Benchmarks
 
 A small, local load test. It checks that the platform behaves correctly under a realistic mixed workload and shows
-where time goes. It is not a capacity claim: the service, the load generator and PostgreSQL all run on one
-workstation, and the numbers below hold only for the configuration stated next to them.
+where time goes. The service, the load generator, and PostgreSQL run on one machine, so the numbers describe the configuration
+stated next to them, not the capacity of a deployment.
 
 ## How to run
 
@@ -65,12 +65,11 @@ Percentiles use the nearest-rank method over all attempts (`n` is shown). The Pr
 
 ## Results (2026-10-01)
 
-These numbers were measured at commit 0246d52, before the review fixes and the Tier 2 additions (RabbitMQ, Redis,
+These numbers were measured at commit 0246d52, before the code-review fixes and the later additions (RabbitMQ, Redis,
 request limits), and were not re-run afterwards.
 
-Hardware and runtime: Intel Core i9-14900KF (24 cores / 32 threads), 96 GB RAM, Windows 11 (10.0.26100),
-Eclipse Temurin 21.0.12.1, JVM default heap (max 24 GB). Service, generator and embedded PostgreSQL 17.11 on the same
-machine. Service configuration: one worker pool with 8 slots, in-memory dispatcher, lease 30 s, heartbeat 10 s,
+Hardware and runtime: an x86-64 desktop CPU (24 cores / 32 threads), Windows 11, Eclipse Temurin 21, the JVM's
+default heap. Service, generator and embedded PostgreSQL 17 on the same machine. Service configuration: one worker pool with 8 slots, in-memory dispatcher, lease 30 s, heartbeat 10 s,
 retry initial 1 s ×2 capped at 60 s with jitter 0.5 (seed 42), reconciler every 100 ms, 3 attempts per job.
 
 | Metric | Burst (2,000 jobs, 8 workers) | Paced 30 jobs/s (2,000 jobs, 8 workers) |
@@ -111,8 +110,16 @@ Commands that produced them:
   14 jobs whose three attempts all failed were dead-lettered, and the 20 permanent failures went to `FAILED` without
   retries.
 
-## Not measured
+## Limitations
 
-- Multiple service instances, a separate database host, or network latency between components.
-- The RabbitMQ dispatcher under load (functional tests only).
-- Long-running soak tests, memory growth, or database growth over time.
+- Not measured: multiple service instances, a separate database host, or network latency between components.
+- Not measured: long-running soak tests, memory growth, or database growth over time.
+- The RabbitMQ dispatcher has functional and failure tests but was not load-tested.
+- The load test ran before the code-review fixes and the later additions and was not repeated afterwards.
+- Workers run in-process behind `WorkerProtocol`; a gRPC worker protocol and separate worker processes are not built.
+- There is no OpenTelemetry tracing; the service has Micrometer metrics and JSON logs.
+- The Kubernetes manifests were validated with kubeconform only and never applied to a cluster.
+- With the default in-memory dispatcher several instances may share one database safely, but each instance's queue
+  only feeds its own workers; work sharing across instances needs the RabbitMQ dispatcher.
+- Idempotency keys do not expire, and finished jobs are not archived.
+- The API has no authentication or authorization.

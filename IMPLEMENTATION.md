@@ -98,6 +98,6 @@ compare-and-set updates and Flyway migrations, the REST API with idempotency, le
 retries with backoff and jitter, timeouts, cancellation of queued and running jobs, dead-lettering, the reconciler, an
 in-process worker pool per queue, Micrometer metrics, structured logs, a Maven Wrapper build, smoke scripts, a
 Dockerfile and a compose file. `./mvnw -B verify` runs 570+ unit tests and 130+ integration tests against real
-PostgreSQL (embedded binaries, no Docker needed). Tier 2 adds an optional RabbitMQ dispatcher, an
+PostgreSQL (embedded binaries, no Docker needed). The later additions are an optional RabbitMQ dispatcher, an
 optional Redis idempotency cache and rate limit, multiple worker pools and a CI workflow; Kubernetes manifests are
 validated statically with kubeconform (not applied to a cluster). Not done: gRPC workers and tracing.

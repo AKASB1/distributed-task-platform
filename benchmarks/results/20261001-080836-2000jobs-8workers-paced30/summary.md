@@ -2,12 +2,10 @@
 
 ## Environment
 
-- CPU: Intel(R) Core(TM) i9-14900KF
+- CPU: x86-64 desktop CPU
 - logical processors: 32
-- RAM: 96 GB
-- OS: Windows 11 10.0 (amd64)
+- OS: Windows 11
 - Java: Eclipse Adoptium 21.0.12.1+1-LTS
-- JVM max heap: 24544 MB
 
 ## Configuration
 
